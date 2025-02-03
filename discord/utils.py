@@ -108,7 +108,7 @@ __all__ = (
 )
 
 DISCORD_EPOCH = 1420070400000
-DEFAULT_FILE_SIZE_LIMIT_BYTES = 26214400
+DEFAULT_FILE_SIZE_LIMIT_BYTES = 10485760
 
 
 class _MissingSentinel:
@@ -327,7 +327,7 @@ def oauth_url(
     permissions: Permissions = MISSING,
     guild: Snowflake = MISSING,
     redirect_uri: str = MISSING,
-    scopes: Iterable[str] = MISSING,
+    scopes: Optional[Iterable[str]] = MISSING,
     disable_guild_select: bool = False,
     state: str = MISSING,
 ) -> str:
@@ -369,7 +369,8 @@ def oauth_url(
         The OAuth2 URL for inviting the bot into guilds.
     """
     url = f'https://discord.com/oauth2/authorize?client_id={client_id}'
-    url += '&scope=' + '+'.join(scopes or ('bot', 'applications.commands'))
+    if scopes is not None:
+        url += '&scope=' + '+'.join(scopes or ('bot', 'applications.commands'))
     if permissions is not MISSING:
         url += f'&permissions={permissions.value}'
     if guild is not MISSING:
@@ -868,6 +869,12 @@ def resolve_invite(invite: Union[Invite, str]) -> ResolvedInvite:
     invite: Union[:class:`~discord.Invite`, :class:`str`]
         The invite.
 
+    Raises
+    -------
+    ValueError
+        The invite is not a valid Discord invite, e.g. is not a URL
+        or does not contain alphanumeric characters.
+
     Returns
     --------
     :class:`.ResolvedInvite`
@@ -887,7 +894,12 @@ def resolve_invite(invite: Union[Invite, str]) -> ResolvedInvite:
             event_id = url.query.get('event')
 
             return ResolvedInvite(code, int(event_id) if event_id else None)
-    return ResolvedInvite(invite, None)
+
+        allowed_characters = r'[a-zA-Z0-9\-_]+'
+        if not re.fullmatch(allowed_characters, invite):
+            raise ValueError('Invite contains characters that are not allowed')
+
+        return ResolvedInvite(invite, None)
 
 
 def resolve_template(code: Union[Template, str]) -> str:
@@ -1520,3 +1532,11 @@ def _format_call_duration(duration: datetime.timedelta) -> str:
             formatted = f"{years} years"
 
     return formatted
+
+
+class _RawReprMixin:
+    __slots__: Tuple[str, ...] = ()
+
+    def __repr__(self) -> str:
+        value = ' '.join(f'{attr}={getattr(self, attr)!r}' for attr in self.__slots__)
+        return f'<{self.__class__.__name__} {value}>'
